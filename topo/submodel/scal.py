@@ -3,7 +3,7 @@ import param
 import imagen
 
 from topo.base.arrayutil import DivideWithConstant, MultiplyWithConstant
-from topo import sheet
+from topo import optimized, projection, sheet
 
 from . import Model
 from .gcal import ModelGCAL
@@ -53,7 +53,7 @@ class EarlyVisionSCAL(EarlyVisionModel):
         The size of the surround Gaussian used to compute the
         center-surround receptive field.""")
 
-    gain_control_size = param.Number(default=0.5, bounds=(0, None), doc="""
+    gain_control_size = param.Number(default=0.8, bounds=(0, None), doc="""
         The size of the divisive inhibitory suppressive field used for
         contrast-gain control in the LGN sheets. This also acts as the
         corresponding bounds radius.""")
@@ -62,7 +62,7 @@ class EarlyVisionSCAL(EarlyVisionModel):
         Connection field radius of a unit in the LGN level to units in
         a retina sheet.""")
 
-    lgnlateral_radius = param.Number(default=0.5, bounds=(0, None), doc="""
+    lgnlateral_radius = param.Number(default=0.8, bounds=(0, None), doc="""
         Connection field radius of a unit in the LGN level to
         surrounding units, in case gain control is used.""")
 
@@ -73,9 +73,9 @@ class EarlyVisionSCAL(EarlyVisionModel):
         """
         or_dim = 'or' in self.dims
         gaussian = (self.dataset == 'Gaussian')
-        pattern_parameters = {'size':(0.1 if or_dim and gaussian
+        pattern_parameters = {'size':(0.2 if or_dim and gaussian
                                       else 3 * 0.1 if gaussian else 10.0),
-                              'aspect_ratio': 5 if or_dim else 1.0,
+                              'aspect_ratio': 4.6667 if or_dim else 1.0,
                               'scale': self.contrast / 100.0}
         return super(EarlyVisionSCAL, self).training_pattern_setup(
             pattern_parameters=pattern_parameters,
@@ -189,6 +189,18 @@ class ModelSCAL(EarlyVisionSCAL, ModelGCAL):
 
     lateral_size = param.Number(default=2.5, bounds=(0, None), doc="""
         Size of the lateral excitatory connections within V1Exc.""")
+
+    def property_setup(self, properties):
+        "Specify weight initialization, response function, and learning function"
+        properties = super(ModelSCAL, self).property_setup(properties)
+
+        projection.CFProjection.cf_shape=imagen.Disk(smoothing=0.0)
+        projection.CFProjection.response_fn=optimized.CFPRF_DotProduct_cython()
+        projection.CFProjection.learning_fn=optimized.CFPLF_Hebbian_cython()
+        projection.CFProjection.weights_output_fns=[optimized.CFPOF_DivisiveNormalize_L1_cython()]
+        projection.SharedWeightCFProjection.response_fn=optimized.CFPRF_DotProduct_cython()
+        sheet.SettlingCFSheet.joint_norm_fn = optimized.compute_joint_norm_totals_cython
+
 
     @Model.CFProjection
     def lateral_inhibitory(self, src_properties, dest_properties):

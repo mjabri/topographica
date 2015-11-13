@@ -458,6 +458,7 @@ topo_parser.add_option("-o","--outputpath",action="callback",callback=o_action,t
 def gui(start=True,exit_on_quit=True):
     """Start the GUI as if -g were supplied in the command used to launch Topographica."""
     if matplotlib_imported:
+        from holoviews.plotting import mpl
         plt.switch_backend('TkAgg')
     auto_import_commands()
     if start:
@@ -500,12 +501,25 @@ topo_parser.add_option("-c","--command",action = "callback",callback=c_action,ty
 def n_action(option,opt_str,value,parser):
     args = [arg for arg in sys.argv[1:] if arg != opt_str]
     options, args = parser.parse_args(args)
-    from IPython.html.notebookapp import NotebookApp
     sys.argv = ['notebook']
-    NotebookApp.ipython_dir = param.resolve_path('platform/ipython', path_to_file=False)
-    NotebookApp.profile = 'topo'
-    if options.Profile is not None:
-        NotebookApp.profile = options.Profile
+    try: # Jupyter/IPython >= 4.0
+        from notebook.notebookapp import NotebookApp
+        jupyter = True
+    except: # IPython <4.0
+        from IPython.html.notebookapp import NotebookApp
+        jupyter = False
+
+    if jupyter:
+        ipython_dir = param.resolve_path('platform/ipython', path_to_file=False)
+        os.environ['IPYTHONDIR'] = ipython_dir
+        config_dir = param.resolve_path('platform/jupyter', path_to_file=False)
+        NotebookApp.config_dir = config_dir
+    else:
+        if options.Profile is None:
+            config_dir = param.resolve_path('platform/ipython/', path_to_file=False)
+            NotebookApp.ipython_dir = config_dir
+        else:
+            NotebookApp.profile = options.Profile
     if options.IP is not None:
         NotebookApp.ip = options.IP
     if options.Port is not None:
